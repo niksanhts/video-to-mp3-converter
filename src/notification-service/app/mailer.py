@@ -33,8 +33,8 @@ def send_mail(receiver: str, subject: str, message: str):
     msg['From'] = settings.MAIL_DEFAULT_SENDER
     msg['To'] = receiver
 
-    # Send email
     with SMTP(settings.MAIL_SERVER, settings.MAIL_PORT) as server:
+        server.starttls()
         server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
         server.sendmail(settings.MAIL_DEFAULT_SENDER, receiver, msg.as_string())
         del msg
