@@ -24,7 +24,7 @@ RUN apt update && apt install -y libpq-dev gcc
 ENV UV_PROJECT_ENVIRONMENT="/usr/local/"
 
 # Copy the uv configuration and pyproject.toml files
-COPY pyproject.toml uv.lock README.md $WORK_DIR
+COPY pyproject.toml uv.lock $WORK_DIR
 RUN pip install uv
 
 # Install project dependencies via uv (using the locked version)
