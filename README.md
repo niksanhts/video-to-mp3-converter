@@ -1,55 +1,85 @@
-# Microservices Architecture in Python
+# Microservices Python
 
-<hr />
+## Описание
 
-## About
+**Microservices Python** — это проект, реализующий микросервисную архитектуру с использованием FastAPI, RabbitMQ, MySQL и MongoDB для конвертации видеофайлов в аудиоформат mp3 с последующей отправкой ссылки или идентификатора для скачивания результата на email пользователя. Система полностью асинхронна и ориентирована на масштабируемость и изоляцию логики между сервисами.
 
-<p>
-This is a <strong><a href="https://fastapi.tiangolo.com/">FastApi</a></strong> implementation of the <strong style="font-size: 18px;">video to mp3 converter system</strong> demonstrated at <strong><a href="https://www.youtube.com/watch?v=ZYAPH56ANC8" target="_blank">Kantan Coding</a></strong>
-<p/>
+## Сервисы и архитектура
 
-### Components
+- **API Gateway**  
+  Входная точка для клиента. Аутентификация, маршрутизация запросов, работа с файлами, публикация событий в очередь RabbitMQ.
 
-- **Gateway**
-  - Gateway to the system for handling all incoming requests from clients.
-  - Stores uploaded videos in a **MongoDB** database.
-  - Puts a message in **RabbitMQ** when a video is uploaded.
-- **users-service**
-  - Responsible for user registration and user authentication.
-  - Stores user data in a **MySql** database.
-- **Converter-Service**
-  - Consumes message from **RabbitMQ** to get video file ID and downloads the video.
-  - Converts the video to mp3 and stores in **MongoDB**.
-  - Puts a message in **RabbitMQ** with the mp3 file ID.
-- **Notification-Service**
-  - Consumes message from **RabbitMQ** to get mp3 file ID.
-  - Sends email to the client with the mp3 file ID.
-  - Client can then send a request to the Api-Gateway with the mp3 file id along with his/her jwt to download the mp3.
+- **Users-Service**  
+  Регистрация и аутентификация пользователей. Хранение учетных данных в MySQL.
 
-## Running with docker compose
+- **Converter-Service**  
+  Получает сообщения о новых видео из RabbitMQ, скачивает видеофайл из MongoDB, конвертирует в mp3, загружает обратно в MongoDB и отправляет уведомление в очередь о готовности результата.
 
-- create **.env** using ***.env.example*** in project root
+- **Notification-Service**  
+  Слушает очередь уведомлений, по готовности mp3-файла получает идентификатор и отправляет письмо пользователю с инструкцией для скачивания.
 
-- Run `$ docker compose up -d`
-- Visit `http://0.0.0.0:5000/docs`
-- Cleanup
-  ```commandline
-  $ docker compose down -v
-  $ sudo rm -rf volMongo/ volMysql/ volRabbit/
-  ```
+- **Инфраструктурные компоненты**  
+  - MongoDB — хранение видео и аудио файлов.
+  - MySQL — хранение информации о пользователях.
+  - RabbitMQ — связь между сервисами, очереди событий.
+  - Email-сервис — отправка писем пользователям.
 
-## Deploy to local <a href="https://kind.sigs.k8s.io/docs/user/quick-start">kind</a> cluster 
+## Инструкция по запуску
 
-- install <a href="https://kind.sigs.k8s.io/docs/user/quick-start">kind</a>, <a href="https://pwittrock.github.io/docs/tasks/tools/install-kubectl/#install-kubectl-binary-via-curl">kubectl</a> & <a href="https://helm.sh/docs/intro/install/#from-script">helm</a>
+1. Склонируйте репозиторий:
+   ```
+   git clone https://github.com/nahid111/microservices-python
+   cd microservices-python
+   ```
 
-- create **.env** using ***.env.example*** in project root
-- Deploy `$ ./deploy.sh`
-- Cleanup `$ ./cleanup.sh`
-- Delete cluster `$ kind delete cluster --name=my-cluster`
+2. Подготовьте файл окружения `.env` на основе `example.env`.
+
+3. Запустите все сервисы через Docker Compose:
+   ```
+   docker compose up
+   ```
+   Или в фоне:
+   ```
+   docker compose up -d
+   ```
+
+4. Документация API будет доступна по адресу  
+   `http://0.0.0.0:5000/docs`
+
+5. Для остановки и очистки:
+   ```
+   docker compose down -v
+   sudo rm -rf volMongo/ volMysql/ volRabbit/
+   ```
+
+## Архитектура (схема взаимодействия)
+
+![Обработка запроса](docs/flow.png)
+
+![Взаимосвязи](docs/relations.png)
 
 
-### <a href="./cmds.md">cmds</a>
+## Пример рабочего процесса
 
+1. Пользователь регистрируется и авторизуется через API Gateway.
+2. Через Gateway загружает видеофайл (JWT обязателен).
+3. Gateway сохраняет видео в MongoDB и публикует событие в очередь.
+4. Converter-Service конвертирует файл и публикует новый идентификатор обратно в очередь.
+5. Notification-Service отправляет email клиенту.
+6. Пользователь скачивает готовый mp3 через Gateway, предоставив JWT и идентификатор.
 
-> ### NOTE:
-> When using tools like <a href="https://k8slens.dev/">Lens</a>, Make sure to select the proper **namespace** while inspecting the cluster workloads 
+## Требования
+
+- Docker и docker-compose
+- Python 3.8+ (для локальной разработки)
+- Аккаунт на DockerHub (если нужен деплой на Kubernetes)
+- Внешние сервисы: email SMTP, если требуется отправка писем.
+
+## Переменные окружения
+
+Все настройки внешних подключений и секретов (пароли, адреса, ключи) задаются через `.env` файл на примере `example.env`.
+
+## Документация и поддержка
+
+Для полного описания ручек API — откройте Swagger по адресу выше.  
+Общие вопросы и баги — через GitHub Issues или по указанным контактам.
