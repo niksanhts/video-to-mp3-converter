@@ -1,4 +1,4 @@
 import logging
 
-logging.basicConfig(level=logging.INFO, filename="conversion.log", filemode='w')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
