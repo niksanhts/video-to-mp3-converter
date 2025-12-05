@@ -1,8 +1,6 @@
-from bson import ObjectId
-from fastapi import HTTPException, APIRouter, UploadFile, Depends
+import requests
+from fastapi import APIRouter, UploadFile, Depends, HTTPException
 from fastapi.responses import FileResponse
-from gridfs.errors import NoFile
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 
 from app.api.deps import require_token
 from app.api.publisher import rabbitmq_publisher
@@ -10,23 +8,29 @@ from app.core.config import settings
 
 router = APIRouter()
 
-client = AsyncIOMotorClient(settings.MONGODB_URL)
-gfs_bucket = AsyncIOMotorGridFSBucket(client.videos)
-gfs_bucket_mp3 = AsyncIOMotorGridFSBucket(client.mp3s)
+FILE_STORAGE_URL = settings.FILE_STORAGE_URL
 
 
 @router.post("/")
-async def upload_video(video: UploadFile, token: dict[str, str] = Depends(require_token)):
-    # Upload the video
+def upload_video(video: UploadFile, token: dict[str, str] = Depends(require_token)):
+    if not video or not video.filename:
+        raise HTTPException(status_code=400, detail="Invalid file")
+
     try:
-        async with gfs_bucket.open_upload_stream(filename=video.filename) as upload_stream:
-            await upload_stream.write(video.file.read())
-            file_id = upload_stream._id
+        files = {"file": (video.filename, video.file.read())}
+        response = requests.post(f"{FILE_STORAGE_URL}/upload", files=files, timeout=60)
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="File storage service failed")
+
+        file_info = response.json()
+        file_id = file_info["file_id"]
+
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="File upload failed")
 
-    # Publish Message to the Topic
+    # Публикуем сообщение в RabbitMQ
     try:
         rabbitmq_publisher.publish({
             "video_fid": str(file_id),
@@ -35,24 +39,39 @@ async def upload_video(video: UploadFile, token: dict[str, str] = Depends(requir
         })
     except Exception as e:
         print(e)
-        # delete if publishing fails
-        await gfs_bucket.delete(ObjectId(file_id))
+        # Попытка удалить файл через file-storage-service при ошибке публикации
+        try:
+            requests.delete(f"{FILE_STORAGE_URL}/{file_id}", timeout=10)
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail="Publishing failed")
 
     return {"file_id": str(file_id), "filename": video.filename}
 
 
 @router.get("/{file_id}")
-async def download_video(file_id: str):
-    temp_file_path = f"/tmp/{file_id}.mp3"
+def download_video(file_id: str):
     try:
-        grid_out = await gfs_bucket_mp3.open_download_stream(ObjectId(file_id))
-        # Create a temporary file to write the content
-        with open(temp_file_path, "wb") as temp_file:
-            temp_file.write(await grid_out.read())
-        return FileResponse(temp_file_path, filename=f"{file_id}.mp3")
-    except NoFile:
-        raise HTTPException(status_code=404, detail="File not found")
+        response = requests.get(f"{FILE_STORAGE_URL}/{file_id}", timeout=60)
+
+        if response.status_code == 404:
+            raise HTTPException(status_code=404, detail="File not found")
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="File storage service error")
+
+        file_info = response.json()
+        content = file_info.get("content_base64")
+        filename = file_info.get("filename", file_id)
+
+        # Временный файл для FileResponse
+        temp_file = temp_file.NamedTemporaryFile(delete=False)
+        temp_file.write(content.encode("latin1"))
+        temp_file.close()
+
+        return FileResponse(temp_file.name, filename=filename)
+
+    except HTTPException:
+        raise
     except Exception as e:
         print(e)
-        raise HTTPException(status_code=500)
+        raise HTTPException(status_code=500, detail="Download failed")

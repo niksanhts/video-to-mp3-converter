@@ -1,7 +1,6 @@
 version: '3.8'
 services:
 
-
   rabbitMQ:
     image: rabbitmq:3-management-alpine
     container_name: "rabbitMQ"
@@ -58,11 +57,11 @@ services:
     ports:
       - "5432:5432"
     env_file:
-      - .env
+      - ./.env
     volumes:
       - volPostgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"] # Check specific database
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -86,12 +85,11 @@ services:
       context: ./src/users-service
       dockerfile: Dockerfile
     container_name: "users-service"
-    command:
-      - /bin/bash
-      - -c
-      - |
-        alembic upgrade head
-        gunicorn app.main:app --bind 0.0.0.0:8008 --worker-class uvicorn.workers.UvicornWorker --capture-output --log-level debug
+    command: >
+      /bin/bash -c "
+      alembic upgrade head &&
+      gunicorn app.main:app --bind 0.0.0.0:8008 --worker-class uvicorn.workers.UvicornWorker --capture-output --log-level debug
+      "
     ports:
       - "8008:8008"
     env_file:
@@ -162,6 +160,24 @@ services:
     volumes:
       - './src/notification-service/:/notification_svc_app'
 
+  file-storage-service:
+    build:
+      context: ./src/file-service
+      dockerfile: Dockerfile
+    container_name: "file-storage-service"
+    command: [ "python", "run.py" ]
+    ports:
+      - "8020:8020"
+    env_file:
+      - ./.env
+    depends_on:
+      mongoDB:
+        condition: service_healthy
+    networks:
+      - skynet
+    volumes:
+      - './src/file-storage-service/:/file_storage_svc_app'
+
 networks:
   skynet:
     driver: bridge
@@ -170,4 +186,3 @@ volumes:
   volRabbit:
   volMongo:
   volPostgres:
-

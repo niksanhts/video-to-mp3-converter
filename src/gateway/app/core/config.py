@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     MONGODB_URL: str
     RABBITMQ_HOST: str
     QUEUE_NAME: str
+    FILE_STORAGE_URL : str = "http://file-storage-service:8020/files"
 
     class Config:
         extra = Extra.allow
