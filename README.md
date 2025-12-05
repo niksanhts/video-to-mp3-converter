@@ -52,11 +52,23 @@
    sudo rm -rf volMongo/ volMysql/ volRabbit/
    ```
 
-## Архитектура (схема взаимодействия)
+## Визуализация
 
-![Обработка запроса](docs/flow.png)
-
-![Взаимосвязи](docs/relations.png)
+### Диаграмма компонентов
+![](docs/components_diagram.png)
+### Схема БД
+![](docs/db_scheme.png)
+### Диаграммы классов микросервисов
+#### Getaway Service
+![](docs/services-diagrams/getaway.png)
+#### User Service
+![](docs/services-diagrams/user.png)
+#### File Service
+![](docs/services-diagrams/file.png)
+#### Convertation Service
+![](docs/services-diagrams/convert.png)
+#### Notification Service
+![](docs/services-diagrams/notification.png)
 
 
 ## Пример рабочего процесса
