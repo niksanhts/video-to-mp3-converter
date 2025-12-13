@@ -6,6 +6,14 @@ from jinja2 import FileSystemLoader, Environment, TemplateError
 from app import logger
 from app.config import settings
 
+import json
+from datetime import datetime
+from sqlalchemy.orm import Session
+
+from app.db import SessionLocal, Notification
+from app import logger
+from app.config import settings
+
 
 def render_template(template_file: str, data: dict) -> str:
     try:
@@ -50,16 +58,47 @@ def send_mail(receiver: str, subject: str, message: str):
         raise
 
 
-def notify(message):
+def notify(message: dict):
+    db: Session = SessionLocal()
+    notif = None
     try:
         logger.info("processing notify request")
 
+        # 1. создаём запись в БД со статусом queued
+        notif = Notification(
+            user_id=message.get("user_id"),
+            email=message.get("email"),
+            subject="Download mp3",
+            template_name="app/demo.html",
+            payload_json=json.dumps(message),
+            status="queued",
+        )
+        db.add(notif)
+        db.commit()
+        db.refresh(notif)
+
+        # 2. рендер и отправка письма
         rendered = render_template('app/demo.html', {"mp3_fid": message.get("mp3_fid")})
         send_mail(message.get("email"), 'Download mp3', rendered)
+
+        # 3. обновляем запись как sent
+        notif.status = "sent"
+        notif.sent_at = datetime.utcnow()
+        notif.updated_at = datetime.utcnow()
+        db.add(notif)
+        db.commit()
 
         logger.info("email notification complete")
         return None
 
-    except Exception:
+    except Exception as e:
         logger.error("notify failed", exc_info=True)
+        if notif is not None:
+            notif.status = "failed"
+            notif.error_message = str(e)
+            notif.updated_at = datetime.utcnow()
+            db.add(notif)
+            db.commit()
         return True
+    finally:
+        db.close()

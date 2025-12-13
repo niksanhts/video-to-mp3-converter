@@ -58,6 +58,7 @@
 ![](docs/components_diagram.png)
 ### Схема БД
 ![](docs/db_scheme.png)
+![](docs/notitfaction_scheme.png)
 ### Диаграммы классов микросервисов
 #### Getaway Service
 ![](docs/services-diagrams/getaway.png)
